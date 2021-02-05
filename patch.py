@@ -3,9 +3,7 @@ from os.path import realpath, relpath
 from zipfile import ZipFile
 import gamedata,logging,coloredlogs,hashlib,zlib,os,sys,shutil,pathlib,struct
 coloredlogs.install(0)
-
-game='jojoban.zip'
-xzone='''C:\Program Files (x86)\游聚游戏平台'''
+from config import *
 #===================
 # Setup
 #==================
