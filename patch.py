@@ -163,4 +163,4 @@ with open('./xzone/resource/res/rom_md5.xml') as f:
     lines = '\x0a'.join(lines)
 open('./xzone/resource/res/rom_md5.xml','w').write(lines)
 shutil.copy('./jojoban.zip','./xzone/resource/roms/jojoban.zip')
-logging.info('Patching complete.')
+logging.info('Patching complete. Be sure to overwrite the installation with files within `xzone`')
