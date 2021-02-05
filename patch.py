@@ -1,8 +1,7 @@
 from io import BytesIO
-from os.path import realpath, relpath
 from zipfile import ZipFile
-import gamedata,logging,coloredlogs,hashlib,zlib,os,sys,shutil,pathlib,struct
-coloredlogs.install(0)
+import gamedata,logging,hashlib,zlib,os,sys,shutil,pathlib,struct
+logging.basicConfig(level=0)
 from config import *
 #===================
 # Setup
