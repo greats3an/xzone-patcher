@@ -22,6 +22,9 @@
 运行  `patch.py`，打过补丁的模拟器及其他文件会保存在 `xzone` 文件夹
 此后即可将该文件夹内容覆盖至原安装目录
 
+#### 效果
+![demo](https://github.com/greats3an/xzone-patcher/blob/master/img/demo.png "demo")
+
 ------------
 
 ### 注意
