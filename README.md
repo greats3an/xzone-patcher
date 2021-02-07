@@ -12,7 +12,7 @@
 	ROM 需求：
 	- 最好是游聚版（`resources\roms` 文件夹中）改的
 	- 要求日版（`jojoban.zip` 置于）且 ROM内容 以 `simm` 加密封包
-	- 避免修改贴图（如 jacket dio）；同真人对线会导致双方desync
+	- 避免修改贴图（如 jacket dio）；同真人对线会导致双方desync (改pointers没问题)
 
 #### 配置
 1. 将 `jojoban.zip` 置于同补丁目录
@@ -23,7 +23,7 @@
 此后即可将该文件夹内容覆盖至原安装目录
 
 #### 效果
-![demo](https://github.com/greats3an/xzone-patcher/blob/master/img/demo.png "demo")
+![demo](https://github.com/greats3an/xzone-patcher/blob/master/img/demo.png "观战视角")
 
 ------------
 
