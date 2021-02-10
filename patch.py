@@ -5,7 +5,6 @@ import logging
 import hashlib
 import zlib
 import os
-import sys
 import shutil
 import pathlib
 import struct
@@ -17,7 +16,6 @@ RELPATH = {
     'bin/emulib2.dll': '{bin}/emulib2.dll',
     'bin/emulib3.dll': '{bin}/emulib3.dll',
     'bin/emulib4.dll': '{bin}/emulib4.dll',
-    'resource/roms.md5': '{resource}/roms.md5',
     'resource/res/rom_md5.xml': '{resource}/res/rom_md5.xml',
 }
 
@@ -86,105 +84,101 @@ def find_and_patch(src: bytearray, pattern: bytes, repl: bytes, offset=0):
     src[index:index+len(repl)] = repl
     return find_and_patch(src, pattern, repl, index + len(repl))
 
+def __main__():
+    # Locating X-Zone & filling the blanks
+    try:
+        zone = locate_xzone(xzone)
+        for k, v in RELPATH.items():
+            RELPATH[k] = v.format(**zone)
+    except FileNotFoundError as e:
+        logging.critical(e)
+        return False
+    logging.info('X-Zone setup successfully located.')
+    archive = match_by_filename(game)
+    if not archive:
+        logging.critical('Target file not supported (%s)' % game)
 
-# Locating X-Zone & filling the blanks
-try:
-    zone = locate_xzone(xzone)
+    md5hash = md5sum(game).hexdigest()
+    logging.info('====================================')
+    logging.info('= GAME     : %s' % archive.GAMENAME)
+    logging.info('= ZIPNAME  : %s' % archive.FILENAME)
+    logging.info('= MD5 HASH : %s' % md5hash)
+    logging.info('====================================')
+
+    # Extracting files
+    logging.debug('Cleaning up')
+    cleandir('./extracted')
+    if not extract(game):
+        logging.critical('Extraction failed,aborting.')
+    # Calculating & Comparing CRC
+    logging.debug('Calculating CRC')
+    crc = dict()
+    for simm in os.listdir('./extracted'):
+        crc[simm] = crc32('./extracted/%s' % simm)
+    # Checking ROM integrity
+    dirty = False
+    crc_patches = []
+    for fname, crc_ in archive.CRC32.items():
+        if not fname in crc:
+            logging.critical('Cannot find %s' % fname)
+            dirty = True
+            continue
+        if not crc_ == crc[fname]:
+            logging.warning('Mismatched CRC (%s vs %s) for %s, will be patched.' % (
+                crc_, crc[fname], fname))
+            crc_patches.append((crc_, crc[fname]))
+        else:
+            logging.debug('Matched CRC for %s' % fname)
+
+    if dirty:
+        logging.critical('ROM is either incomplete or severly damaged. Not proceeding.')
+        return False
+
+    # Gather files
+    logging.debug('Gathering X-Zone files')
+    cleandir('./xzone') and cleandir('./xzone/bin') and cleandir('./xzone/resource') and cleandir(
+        './xzone/resource/res') and cleandir('./xzone/resource/roms')
     for k, v in RELPATH.items():
-        RELPATH[k] = v.format(**zone)
-except FileNotFoundError as e:
-    logging.critical(e)
-    sys.exit(2)
-logging.info('X-Zone setup successfully located.')
-archive = match_by_filename(game)
-if not archive:
-    logging.critical('Target file not supported (%s)' % game)
+        shutil.copyfile(v, './xzone/%s' % k)
+    logging.info('Files copied')
 
-md5hash = md5sum(game).hexdigest()
-logging.info('====================================')
-logging.info('= GAME     : %s' % archive.GAMENAME)
-logging.info('= ZIPNAME  : %s' % archive.FILENAME)
-logging.info('= MD5 HASH : %s' % md5hash)
-logging.info('====================================')
-
-# Extracting files
-logging.debug('Cleaning up')
-cleandir('./extracted')
-if not extract(game):
-    logging.critical('Extraction failed,aborting.')
-# Calculating & Comparing CRC
-logging.debug('Calculating CRC')
-crc = dict()
-for simm in os.listdir('./extracted'):
-    crc[simm] = crc32('./extracted/%s' % simm)
-# Checking ROM integrity
-dirty = False
-crc_patches = []
-for fname, crc_ in archive.CRC32.items():
-    if not fname in crc:
-        logging.critical('Cannot find %s' % fname)
-        dirty = True
-        continue
-    if not crc_ == crc[fname]:
-        logging.warning('Mismatched CRC (%s vs %s) for %s, will be patched.' % (
-            crc_, crc[fname], fname))
-        crc_patches.append((crc_, crc[fname]))
-    else:
-        logging.debug('Matched CRC for %s' % fname)
-
-if dirty:
-    logging.critical(
-        'ROM is either incomplete or severly damaged. Not proceeding.')
-    sys.exit(2)
-
-# Gather files
-logging.debug('Gathering X-Zone files')
-cleandir('./xzone') and cleandir('./xzone/bin') and cleandir('./xzone/resource') and cleandir(
-    './xzone/resource/res') and cleandir('./xzone/resource/roms')
-for k, v in RELPATH.items():
-    shutil.copyfile(v, './xzone/%s' % k)
-logging.info('Files copied')
-
-# ! PATCH 1 : Emulib
-# pre-process -> uint32 values
-crc_patches = [(cuint32(orig), cuint32(patch)) for orig, patch in crc_patches]
-if crc_patches:
-    for emulib in os.listdir('./xzone/bin'):
-        emu = './xzone/bin/%s' % emulib
-        logging.info('Patching %s' % emu)
-        raw = bytearray(open(emu, 'rb').read())
-        for orig, patch in crc_patches:
-            logging.debug('... patching crc %s -> %s' %
-                          (orig.hex(), patch.hex()))
-            offset = find_and_patch(raw, orig, patch)
-            if not offset:
-                logging.warning('crc not found, passing')
-        open(emu, 'wb').write(raw)
-        logging.info('Patched %s' % emu)
-# ! PATCH 2 : MD5 sum
-# patch roms.md5
-lines = []
-with open('./xzone/resource/roms.md5') as f:
-    lines = f.readlines()
-    for i in range(0, len(lines)):
-        if game in lines[i]:
-            lines[i] = '%s = %s' % (md5hash, game)
-            logging.info('Patched roms.md5 ,line %s' % i)
-        lines[i] = lines[i].strip()
-    lines = '\x0a'.join(lines)
-open('./xzone/resource/roms.md5', 'w').write(lines)
-# patch rom_md5.xml
-lines = []
-with open('./xzone/resource/res/rom_md5.xml') as f:
-    lines = f.readlines()
-    for i in range(0, len(lines)):
-        if game in lines[i]:
-            lines[i] = '    <item name="%s" value="%s" />' % (game, md5hash)
-            logging.info('Patched rom_md5.xml ,line %s' % i)
-        lines[i] = lines[i].strip()
-    lines = '\x0a'.join(lines)
-open('./xzone/resource/res/rom_md5.xml', 'w').write(lines)
-logging.debug('Copying ROM file %s' % game)
-shutil.copy('./%s' % game, './xzone/resource/roms/%s' % game)
-print('='*30,'补丁成功。现可将本目录下 xzone 内容覆盖至原安装目录；若欲恢复补丁请重新执行游聚安装包','='*30,sep='\n')
-input('Press ENTER to continue...')
+    # ! PATCH 1 : Emulib
+    # pre-process -> uint32 values
+    crc_patches = [(cuint32(orig), cuint32(patch)) for orig, patch in crc_patches]
+    if crc_patches:
+        for emulib in os.listdir('./xzone/bin'):
+            emu = './xzone/bin/%s' % emulib
+            logging.info('Patching %s' % emu)
+            raw = bytearray(open(emu, 'rb').read())
+            for orig, patch in crc_patches:
+                logging.debug('... patching crc %s -> %s' %
+                            (orig.hex(), patch.hex()))
+                offset = find_and_patch(raw, orig, patch)
+                if not offset:
+                    logging.warning('crc not found, passing')
+            open(emu, 'wb').write(raw)
+            logging.info('Patched %s' % emu)
+    # ! PATCH 2 : MD5 sum
+    # patch rom_md5.xml
+    lines = []
+    with open('./xzone/resource/res/rom_md5.xml') as f:
+        lines = f.readlines()
+        for i in range(0, len(lines)):
+            if game in lines[i]:
+                lines[i] = '    <item name="%s" value="%s" />' % (game, md5hash)
+                logging.info('Patched rom_md5.xml ,line %s' % i)
+            lines[i] = lines[i].strip()
+        lines = '\x0a'.join(lines)
+    open('./xzone/resource/res/rom_md5.xml', 'w').write(lines)
+    logging.debug('Copying ROM file %s' % game)
+    shutil.copy('./%s' % game, './xzone/resource/roms/%s' % game)
+    return True
+if __name__ == '__main__':
+    try:
+        __main__() and print('='*30,'补丁成功。现可将本目录下 xzone 内容覆盖至原安装目录；若欲恢复补丁请重新执行游聚安装包','='*30,sep='\n')
+    except:
+        logging.critical('Critical error')
+        import traceback
+        traceback.print_exc()
+        print('出现错误：请及时将该 traceback 提交 issues')
+    input('Press ENTER to continue...')
