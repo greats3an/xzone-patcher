@@ -8,7 +8,7 @@ import os
 import shutil
 import pathlib
 import struct
-from stat import S_IREAD, S_IRGRP, S_IROTH
+from stat import S_IREAD, S_IRGRP, S_IROTH, S_IWRITE
 logging.basicConfig(level=0)
 # ===================
 # Setup
@@ -67,8 +67,11 @@ def extract(fname: str):
 
 
 def cleandir(dirname: str):
+    def on_error(func, path, exc_info):
+        os.chmod(path, S_IWRITE)
+        os.unlink(path)
     if os.path.isdir(dirname):
-        shutil.rmtree(dirname)
+        shutil.rmtree(dirname, onerror=on_error)
     os.mkdir(dirname)
     return True
 
@@ -84,6 +87,7 @@ def find_and_patch(src: bytearray, pattern: bytes, repl: bytes, offset=0):
     logging.debug('Located at %s,patched.' % index)
     src[index:index+len(repl)] = repl
     return find_and_patch(src, pattern, repl, index + len(repl))
+
 
 def __main__():
     # Locating X-Zone & filling the blanks
@@ -132,7 +136,8 @@ def __main__():
             logging.debug('Matched CRC for %s' % fname)
 
     if dirty:
-        logging.critical('ROM is either incomplete or severly damaged. Not proceeding.')
+        logging.critical(
+            'ROM is either incomplete or severly damaged. Not proceeding.')
         return False
 
     # Gather files
@@ -145,7 +150,8 @@ def __main__():
 
     # ! PATCH 1 : Emulib
     # pre-process -> uint32 values
-    crc_patches = [(cuint32(orig), cuint32(patch)) for orig, patch in crc_patches]
+    crc_patches = [(cuint32(orig), cuint32(patch))
+                   for orig, patch in crc_patches]
     if crc_patches:
         for emulib in os.listdir('./xzone/bin'):
             emu = './xzone/bin/%s' % emulib
@@ -153,7 +159,7 @@ def __main__():
             raw = bytearray(open(emu, 'rb').read())
             for orig, patch in crc_patches:
                 logging.debug('... patching crc %s -> %s' %
-                            (orig.hex(), patch.hex()))
+                              (orig.hex(), patch.hex()))
                 offset = find_and_patch(raw, orig, patch)
                 if not offset:
                     logging.warning('crc not found, passing')
@@ -166,7 +172,8 @@ def __main__():
         lines = f.readlines()
         for i in range(0, len(lines)):
             if game in lines[i]:
-                lines[i] = '    <item name="%s" value="%s" />' % (game, md5hash)
+                lines[i] = '    <item name="%s" value="%s" />' % (
+                    game, md5hash)
                 logging.info('Patched rom_md5.xml ,line %s' % i)
             lines[i] = lines[i].strip()
         lines = '\x0a'.join(lines)
@@ -174,11 +181,14 @@ def __main__():
     logging.debug('Copying ROM file %s' % game)
     shutil.copy('./%s' % game, './xzone/resource/roms/%s' % game)
     # setting read-only attribute
-    os.chmod('./xzone/resource/res/rom_md5.xml', S_IREAD|S_IRGRP|S_IROTH)    
+    os.chmod('./xzone/resource/res/rom_md5.xml', S_IREAD | S_IRGRP | S_IROTH)
     return True
+
+
 if __name__ == '__main__':
     try:
-        __main__() and print('='*30,'补丁成功。现可将本目录下 xzone 内容覆盖至原安装目录；若欲恢复补丁请重新执行游聚安装包','='*30,sep='\n')
+        __main__() and print(
+            '='*30, '补丁成功。现可将本目录下 xzone 内容覆盖至原安装目录；若欲恢复补丁请重新执行游聚安装包', '='*30, sep='\n')
     except:
         logging.critical('Critical error')
         import traceback
