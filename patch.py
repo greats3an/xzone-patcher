@@ -8,6 +8,7 @@ import os
 import shutil
 import pathlib
 import struct
+from stat import S_IREAD, S_IRGRP, S_IROTH
 logging.basicConfig(level=0)
 # ===================
 # Setup
@@ -172,6 +173,8 @@ def __main__():
     open('./xzone/resource/res/rom_md5.xml', 'w').write(lines)
     logging.debug('Copying ROM file %s' % game)
     shutil.copy('./%s' % game, './xzone/resource/roms/%s' % game)
+    # setting read-only attribute
+    os.chmod('./xzone/resource/res/rom_md5.xml', S_IREAD|S_IRGRP|S_IROTH)    
     return True
 if __name__ == '__main__':
     try:
