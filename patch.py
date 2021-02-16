@@ -8,7 +8,7 @@ import os
 import shutil
 import pathlib
 import struct
-from stat import S_IREAD, S_IRGRP, S_IROTH, S_IWRITE
+from stat import S_IWRITE
 logging.basicConfig(level=0)
 # ===================
 # Setup
@@ -18,6 +18,8 @@ RELPATH = {
     'bin/emulib3.dll': '{bin}/emulib3.dll',
     'bin/emulib4.dll': '{bin}/emulib4.dll',
     'resource/res/rom_md5.xml': '{resource}/res/rom_md5.xml',
+    'resource/cfg.xml':'{resource}/cfg.xml',
+    'resource/configure.xml':'{resource}/configure.xml'
 }
 
 
@@ -88,6 +90,10 @@ def find_and_patch(src: bytearray, pattern: bytes, repl: bytes, offset=0):
     src[index:index+len(repl)] = repl
     return find_and_patch(src, pattern, repl, index + len(repl))
 
+def find_line_contains(lines,pattern : str):    
+    for index in range(0,len(lines)):
+        if pattern in lines[index]:
+            yield index
 
 def __main__():
     # Locating X-Zone & filling the blanks
@@ -167,21 +173,36 @@ def __main__():
             logging.info('Patched %s' % emu)
     # ! PATCH 2 : MD5 sum
     # patch rom_md5.xml
-    lines = []
-    with open('./xzone/resource/res/rom_md5.xml') as f:
+    with open('./xzone/resource/res/rom_md5.xml','r+',encoding='utf-8') as f:
         lines = f.readlines()
-        for i in range(0, len(lines)):
-            if game in lines[i]:
-                lines[i] = '    <item name="%s" value="%s" />' % (
-                    game, md5hash)
-                logging.info('Patched rom_md5.xml ,line %s' % i)
-            lines[i] = lines[i].strip()
-        lines = '\x0a'.join(lines)
-    open('./xzone/resource/res/rom_md5.xml', 'w').write(lines)
+        for i in find_line_contains(lines,game):
+            lines[i] = '    <item name="%s" value="%s" />\n' % (game, md5hash)
+            logging.debug('Patched rom_md5.xml ,line %s' % i)            
+            break        
+        lines = ''.join(lines)
+        f.seek(0)
+        f.write(lines)
+    # ! PATCH 3 : XZone updates    
+    with open('./xzone/resource/cfg.xml','r+',encoding='utf-8') as f:
+        lines = f.readlines()
+        # patching out CRC check
+        for i in find_line_contains(lines,'rom_md5.xml'):
+            lines[i] = '        <!--%s-->' % lines[i]
+            logging.debug('Patched cfg.xml, line %s' % i)            
+        lines = ''.join(lines)            
+        f.seek(0)
+        f.write(lines)
+    with open('./xzone/resource/configure.xml','r+',encoding='utf-8') as f:
+        lines = f.readlines()
+        # patching out cfg.xml updates
+        for i in find_line_contains(lines,'remotecfg/pc/cfg.xml'):
+            lines[i] = '        <!--%s-->\n' % lines[i].strip()
+            logging.debug('Patched configure.xml, line %s' % i)            
+        lines = ''.join(lines)            
+        f.seek(0)
+        f.write(lines)        
     logging.debug('Copying ROM file %s' % game)
-    shutil.copy('./%s' % game, './xzone/resource/roms/%s' % game)
-    # setting read-only attribute
-    os.chmod('./xzone/resource/res/rom_md5.xml', S_IREAD | S_IRGRP | S_IROTH)
+    shutil.copy('./%s' % game, './xzone/resource/roms/%s' % game)    
     return True
 
 
