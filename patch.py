@@ -123,7 +123,7 @@ def __main__():
     # Calculating & Comparing CRC
     logging.debug('Calculating CRC')
     crc = dict()
-    for simm in os.listdir('./extracted'):
+    for simm,orig in archive.CRC32.items():        
         crc[simm] = crc32('./extracted/%s' % simm)
     # Checking ROM integrity
     dirty = False
