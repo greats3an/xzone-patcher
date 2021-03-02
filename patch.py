@@ -110,11 +110,10 @@ def __main__():
         logging.critical('Target file not supported (%s)' % game)
 
     md5hash = md5sum(game).hexdigest()
-    logging.info('====================================')
+
     logging.info('= GAME     : %s' % archive.GAMENAME)
     logging.info('= ZIPNAME  : %s' % archive.FILENAME)
     logging.info('= MD5 HASH : %s' % md5hash)
-    logging.info('====================================')
 
     # Extracting files
     logging.debug('Cleaning up')
